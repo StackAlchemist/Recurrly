@@ -1,4 +1,4 @@
-import { View, Text } from 'react-native'
+import { Text } from 'react-native'
 import { styled } from "nativewind";
 import { SafeAreaView as RNSSafeAreaView } from "react-native-safe-area-context";
 const SafeAreaView = styled(RNSSafeAreaView); 
