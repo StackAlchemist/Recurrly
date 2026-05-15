@@ -10,4 +10,4 @@ const Insights = () => {
     </SafeAreaView>
   )
 }
-export default insights
+export default Insights
