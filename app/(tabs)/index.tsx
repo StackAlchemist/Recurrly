@@ -62,7 +62,7 @@ export default function App() {
                 keyExtractor={(item) => item.id}
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                ListFooterComponent={() => (
+                ListEmptyComponent={() => (
                   <Text className="home-empty-text">
                     No upcoming subscriptions yet.
                   </Text>
