@@ -55,13 +55,13 @@ export function AuthTextInput({ style, ...props }: TextInputProps) {
       className="auth-input"
       placeholderTextColor={AUTH_PLACEHOLDER_COLOR}
       textAlignVertical="center"
-      includeFontPadding={false}
       style={[
         {
           minHeight: 52,
           fontSize: 16,
           lineHeight: 22,
           paddingVertical: Platform.OS === "android" ? 12 : 14,
+          ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
         },
         style,
       ]}

@@ -45,7 +45,7 @@ const Settings = () => {
         <ProfileRow label="Joined" value={joinedDate} />
       </View>
 
-      <Pressable className="auth-button" onPress={() => signOut()}>
+      <Pressable className="auth-button" onPress={signOut}>
         <Text className="auth-button-text">Log out</Text>
       </Pressable>
     </SafeAreaView>

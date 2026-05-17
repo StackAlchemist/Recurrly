@@ -5,6 +5,7 @@ import {
   AuthSubmitButton,
   AuthTextInput,
 } from "@/components/AuthScreen";
+import { logAuthDebug, logAuthError } from "@/lib/utils";
 import { useSignIn } from "@clerk/expo";
 import { type Href, useRouter } from "expo-router";
 import React from "react";
@@ -17,52 +18,111 @@ export default function SignIn() {
   const [emailAddress, setEmailAddress] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [code, setCode] = React.useState("");
+  const [formError, setFormError] = React.useState<string | undefined>();
+
+  const isCodeEmpty = code.trim().length === 0;
 
   const finalizeSignIn = async () => {
-    await signIn.finalize({
-      navigate: ({ session, decorateUrl }) => {
-        if (session?.currentTask) {
-          console.log(session.currentTask);
-          return;
-        }
+    try {
+      await signIn.finalize({
+        navigate: ({ session, decorateUrl }) => {
+          if (session?.currentTask) {
+            logAuthDebug("Sign-in session task pending");
+            setFormError("Additional sign-in steps are required. Please try again.");
+            return;
+          }
 
-        router.replace(decorateUrl("/(tabs)") as Href);
-      },
-    });
+          router.replace(decorateUrl("/(tabs)") as Href);
+        },
+      });
+    } catch {
+      setFormError("Could not complete sign-in. Please try again.");
+      logAuthError("Sign-in finalize failed");
+    }
   };
 
   const handleSubmit = async () => {
-    const { error } = await signIn.password({
-      emailAddress,
-      password,
-    });
-    if (error) {
-      console.error(JSON.stringify(error, null, 2));
-      return;
-    }
+    setFormError(undefined);
 
-    if (signIn.status === "complete") {
-      await finalizeSignIn();
-    } else if (signIn.status === "needs_client_trust") {
-      const emailCodeFactor = signIn.supportedSecondFactors.find(
-        (factor) => factor.strategy === "email_code",
-      );
-
-      if (emailCodeFactor) {
-        await signIn.mfa.sendEmailCode();
+    try {
+      const { error } = await signIn.password({
+        emailAddress,
+        password,
+      });
+      if (error) {
+        setFormError("Sign-in failed. Check your email and password.");
+        logAuthError("Sign-in password failed", error);
+        return;
       }
-    } else {
-      console.error("Sign-in attempt not complete:", signIn);
+
+      if (signIn.status === "complete") {
+        await finalizeSignIn();
+      } else if (signIn.status === "needs_client_trust") {
+        const emailCodeFactor = signIn.supportedSecondFactors.find(
+          (factor) => factor.strategy === "email_code",
+        );
+
+        if (emailCodeFactor) {
+          try {
+            await signIn.mfa.sendEmailCode();
+          } catch {
+            setFormError("Could not send verification code. Please try again.");
+            logAuthError("Sign-in send email code failed");
+          }
+        } else {
+          setFormError("Email verification is required but unavailable.");
+        }
+      } else {
+        setFormError("Sign-in could not be completed. Please try again.");
+        logAuthError("Sign-in attempt not complete");
+      }
+    } catch {
+      setFormError("Something went wrong. Please try again.");
+      logAuthError("Sign-in submit failed");
     }
   };
 
   const handleVerify = async () => {
-    await signIn.mfa.verifyEmailCode({ code });
+    const trimmedCode = code.trim();
+    if (!trimmedCode) return;
 
-    if (signIn.status === "complete") {
-      await finalizeSignIn();
-    } else {
-      console.error("Sign-in attempt not complete:", signIn);
+    setFormError(undefined);
+
+    try {
+      await signIn.mfa.verifyEmailCode({ code: trimmedCode });
+
+      if (signIn.status === "complete") {
+        await finalizeSignIn();
+      } else {
+        setFormError("Verification incomplete. Check your code and try again.");
+        logAuthError("Sign-in verification not complete");
+      }
+    } catch {
+      setFormError("Could not verify code. Please try again.");
+      logAuthError("Sign-in verify email code failed");
+    }
+  };
+
+  const handleSendEmailCode = async () => {
+    setFormError(undefined);
+
+    try {
+      await signIn.mfa.sendEmailCode();
+    } catch {
+      setFormError("Could not send a new code. Please try again.");
+      logAuthError("Sign-in resend email code failed");
+    }
+  };
+
+  const handleReset = async () => {
+    setFormError(undefined);
+    setCode("");
+
+    try {
+      await signIn.reset();
+    } catch {
+      setFormError("Could not reset sign-in. Please try again.");
+      logAuthError("Sign-in reset failed");
     }
   };
 
@@ -73,7 +133,10 @@ export default function SignIn() {
         subtitle="We sent a verification code to confirm it's you."
       >
         <View className="auth-form">
-          <AuthField label="Verification code" error={errors.fields.code?.message}>
+          <AuthField
+            label="Verification code"
+            error={errors.fields.code?.message ?? formError}
+          >
             <AuthTextInput
               value={code}
               placeholder="Enter 6-digit code"
@@ -85,17 +148,23 @@ export default function SignIn() {
           <AuthSubmitButton
             label="Verify"
             loading={fetchStatus === "fetching"}
+            disabled={isCodeEmpty}
             onPress={handleVerify}
           />
 
           <Pressable
             className="auth-secondary-button"
-            onPress={() => signIn.mfa.sendEmailCode()}
+            disabled={fetchStatus === "fetching"}
+            onPress={handleSendEmailCode}
           >
             <Text className="auth-secondary-button-text">Send a new code</Text>
           </Pressable>
 
-          <Pressable className="auth-secondary-button" onPress={() => signIn.reset()}>
+          <Pressable
+            className="auth-secondary-button"
+            disabled={fetchStatus === "fetching"}
+            onPress={handleReset}
+          >
             <Text className="auth-secondary-button-text">Use a different email</Text>
           </Pressable>
         </View>
@@ -136,6 +205,8 @@ export default function SignIn() {
             autoComplete="password"
           />
         </AuthField>
+
+        {formError ? <Text className="auth-error">{formError}</Text> : null}
 
         <AuthSubmitButton
           label="Continue"

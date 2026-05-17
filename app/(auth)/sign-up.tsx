@@ -6,6 +6,7 @@ import {
   AuthSubmitButton,
   AuthTextInput,
 } from "@/components/AuthScreen";
+import { logAuthDebug, logAuthError } from "@/lib/utils";
 import { useAuth, useSignUp } from "@clerk/expo";
 import { type Href, Redirect, useRouter } from "expo-router";
 import React from "react";
@@ -19,36 +20,80 @@ export default function SignUp() {
   const [emailAddress, setEmailAddress] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [code, setCode] = React.useState("");
+  const [formError, setFormError] = React.useState<string | undefined>();
+
+  const isCodeEmpty = code.trim().length === 0;
 
   const handleSubmit = async () => {
-    const { error } = await signUp.password({
-      emailAddress,
-      password,
-    });
-    if (error) {
-      console.error(JSON.stringify(error, null, 2));
-      return;
-    }
+    setFormError(undefined);
 
-    await signUp.verifications.sendEmailCode();
+    try {
+      const { error } = await signUp.password({
+        emailAddress,
+        password,
+      });
+      if (error) {
+        setFormError("Sign-up failed. Check your details and try again.");
+        logAuthError("Sign-up password failed", error);
+        return;
+      }
+
+      try {
+        await signUp.verifications.sendEmailCode();
+      } catch {
+        setFormError("Could not send verification code. Please try again.");
+        logAuthError("Sign-up send email code failed");
+      }
+    } catch {
+      setFormError("Something went wrong. Please try again.");
+      logAuthError("Sign-up submit failed");
+    }
   };
 
   const handleVerify = async () => {
-    await signUp.verifications.verifyEmailCode({ code });
+    const trimmedCode = code.trim();
+    if (!trimmedCode) return;
 
-    if (signUp.status === "complete") {
-      await signUp.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            console.log(session.currentTask);
-            return;
-          }
+    setFormError(undefined);
 
-          router.replace(decorateUrl("/(tabs)") as Href);
-        },
-      });
-    } else {
-      console.error("Sign-up attempt not complete:", signUp);
+    try {
+      await signUp.verifications.verifyEmailCode({ code: trimmedCode });
+
+      if (signUp.status === "complete") {
+        try {
+          await signUp.finalize({
+            navigate: ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                logAuthDebug("Sign-up session task pending");
+                setFormError("Additional sign-up steps are required. Please try again.");
+                return;
+              }
+
+              router.replace(decorateUrl("/(tabs)") as Href);
+            },
+          });
+        } catch {
+          setFormError("Could not complete sign-up. Please try again.");
+          logAuthError("Sign-up finalize failed");
+        }
+      } else {
+        setFormError("Verification incomplete. Check your code and try again.");
+        logAuthError("Sign-up verification not complete");
+      }
+    } catch {
+      setFormError("Could not verify code. Please try again.");
+      logAuthError("Sign-up verify email code failed");
+    }
+  };
+
+  const handleSendEmailCode = async () => {
+    setFormError(undefined);
+
+    try {
+      await signUp.verifications.sendEmailCode();
+    } catch {
+      setFormError("Could not send a new code. Please try again.");
+      logAuthError("Sign-up resend email code failed");
     }
   };
 
@@ -74,7 +119,10 @@ export default function SignUp() {
         }
       >
         <View className="auth-form">
-          <AuthField label="Verification code" error={errors.fields.code?.message}>
+          <AuthField
+            label="Verification code"
+            error={errors.fields.code?.message ?? formError}
+          >
             <AuthTextInput
               value={code}
               placeholder="Enter 6-digit code"
@@ -86,12 +134,14 @@ export default function SignUp() {
           <AuthSubmitButton
             label="Verify"
             loading={fetchStatus === "fetching"}
+            disabled={isCodeEmpty}
             onPress={handleVerify}
           />
 
           <Pressable
             className="auth-secondary-button"
-            onPress={() => signUp.verifications.sendEmailCode()}
+            disabled={fetchStatus === "fetching"}
+            onPress={handleSendEmailCode}
           >
             <Text className="auth-secondary-button-text">Send a new code</Text>
           </Pressable>
@@ -133,6 +183,8 @@ export default function SignUp() {
             autoComplete="new-password"
           />
         </AuthField>
+
+        {formError ? <Text className="auth-error">{formError}</Text> : null}
 
         <AuthSubmitButton
           label="Create account"
