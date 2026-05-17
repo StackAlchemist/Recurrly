@@ -1,5 +1,30 @@
 import dayjs from "dayjs";
 
+type ClerkUserNameFields = {
+  fullName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+};
+
+export const getUserDisplayName = (
+  user: ClerkUserNameFields | null | undefined,
+): string | undefined => {
+  if (!user) return undefined;
+
+  return (
+    user.fullName?.trim() ||
+    [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+    user.firstName ||
+    undefined
+  );
+};
+
+export const formatJoinedDate = (value?: Date | number | null): string => {
+  if (!value) return "—";
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.format("MMMM D, YYYY") : "—";
+};
+
 export const formatCurrency = (value: number, currency = "USD"): string => {
   try {
     return new Intl.NumberFormat("en-US", {

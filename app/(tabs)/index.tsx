@@ -1,18 +1,16 @@
 import "@/global.css";
-import { Text, View, FlatList } from "react-native";
-import { Link } from "expo-router";
+import { Text, View, FlatList, Image } from "react-native";
 import { styled } from "nativewind";
 import { SafeAreaView as RNSSafeAreaView } from "react-native-safe-area-context";
-import { Image } from "react-native";
 import images from "@/constants/images";
 import {
-  HOME_USER,
   HOME_BALANCE,
   UPCOMING_SUBSCRIPTIONS,
   HOME_SUBSCRIPTIONS,
 } from "@/constants/data";
+import { useUser } from "@clerk/expo";
 import { icons } from "@/constants/icons";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getUserDisplayName } from "@/lib/utils";
 import dayjs from "dayjs";
 import ListHeading from "@/components/ListHeading";
 import UpcomingSubscriptionsCard from "@/components/UpcomingSubscriptionsCard";
@@ -21,9 +19,12 @@ import { useState } from "react";
 const SafeAreaView = styled(RNSSafeAreaView);
 
 export default function App() {
+  const { user } = useUser();
   const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<
     string | null
   >(null);
+
+  const displayName = getUserDisplayName(user);
 
   return (
     <SafeAreaView className="flex-1 bg-background p-5">
@@ -33,8 +34,21 @@ export default function App() {
           <>
             <View className="home-header">
               <View className="home-user">
-                <Image source={images.avatar} className="home-avatar" />
-                <Text className="home-user-name">{HOME_USER.name}</Text>
+                <Image
+                  source={
+                    user?.imageUrl ? { uri: user.imageUrl } : images.avatar
+                  }
+                  className="home-avatar"
+                />
+                {displayName ? (
+                  <Text
+                    className="home-user-name"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {displayName}
+                  </Text>
+                ) : null}
               </View>
               <Image source={icons.add} className="home-add-icon" />
             </View>
