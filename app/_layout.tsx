@@ -1,18 +1,32 @@
 import { ClerkProvider } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import "@/global.css";
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
+import { PostHogProvider, usePostHog } from "posthog-react-native";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_KEY;
+const posthogHost = process.env.EXPO_PUBLIC_POSTHOG_HOST;
 
 SplashScreen.preventAutoHideAsync().catch((error) => {
   console.error("SplashScreen.preventAutoHideAsync failed:", error);
 });
+
+function ScreenTracker() {
+  const pathname = usePathname();
+  const posthog = usePostHog();
+
+  useEffect(() => {
+    posthog?.capture("$screen_view", { $screen_name: pathname });
+  }, [pathname]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -75,8 +89,15 @@ export default function RootLayout() {
   }
 
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <Stack screenOptions={{ headerShown: false }} />
-    </ClerkProvider>
+    <PostHogProvider
+      apiKey={posthogKey!}
+      options={{ host: posthogHost }}
+      autocapture={{ captureScreens: false }}
+    >
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <ScreenTracker />
+        <Stack screenOptions={{ headerShown: false }} />
+      </ClerkProvider>
+    </PostHogProvider>
   );
 }
